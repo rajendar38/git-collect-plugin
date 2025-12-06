@@ -40,7 +40,7 @@ public class CollectGitStep extends Builder implements SimpleBuildStep {
      */
     private boolean isGitRepository(GitClient git) {
         try {
-           git.revParse("--git-dir");
+           git.revListAll();
            return true;
         } catch (GitException | InterruptedException e) {
            return false;
