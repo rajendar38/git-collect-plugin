@@ -1,5 +1,19 @@
 package io.jenkins.plugins.gitcollect;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collection;
+
+import javax.annotation.Nonnull;
+
+import org.eclipse.jgit.lib.ObjectId;
+import org.jenkinsci.Symbol;
+import org.jenkinsci.plugins.gitclient.Git;
+import org.jenkinsci.plugins.gitclient.GitClient;
+import org.kohsuke.stapler.DataBoundConstructor;
+import org.kohsuke.stapler.DataBoundSetter;
+import org.kohsuke.stapler.QueryParameter;
+
 import hudson.EnvVars;
 import hudson.Extension;
 import hudson.FilePath;
@@ -17,18 +31,6 @@ import hudson.tasks.BuildStepDescriptor;
 import hudson.tasks.Builder;
 import hudson.util.FormValidation;
 import jenkins.tasks.SimpleBuildStep;
-import org.eclipse.jgit.lib.ObjectId;
-import org.jenkinsci.Symbol;
-import org.jenkinsci.plugins.gitclient.Git;
-import org.jenkinsci.plugins.gitclient.GitClient;
-import org.kohsuke.stapler.DataBoundConstructor;
-import org.kohsuke.stapler.DataBoundSetter;
-import org.kohsuke.stapler.QueryParameter;
-
-import javax.annotation.Nonnull;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collection;
 
 public class CollectGitStep extends Builder implements SimpleBuildStep {
 
@@ -68,6 +70,7 @@ public class CollectGitStep extends Builder implements SimpleBuildStep {
         return markedCommit;
     }
 
+    @SuppressWarnings("null")
     @Override
     public void perform(@Nonnull Run<?, ?> run, @Nonnull FilePath workspace,
                         @Nonnull Launcher launcher, @Nonnull TaskListener listener)
@@ -133,7 +136,8 @@ public class CollectGitStep extends Builder implements SimpleBuildStep {
     public static final class DescriptorImpl extends BuildStepDescriptor<Builder> {
 
         @Override
-        public boolean isApplicable(Class<? extends AbstractProject> aClass) {
+        @SuppressWarnings("rawtypes")
+        public boolean isApplicable(final Class<? extends AbstractProject> aClass) {
             return true;
         }
 
