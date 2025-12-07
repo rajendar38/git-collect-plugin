@@ -1,12 +1,10 @@
 package io.jenkins.plugins.gitcollect;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collection;
+import java.util.List;
 
 import javax.annotation.Nonnull;
 
-import org.eclipse.jgit.lib.ObjectId;
 import org.jenkinsci.Symbol;
 import org.jenkinsci.plugins.gitclient.Git;
 import org.jenkinsci.plugins.gitclient.GitClient;
@@ -22,9 +20,7 @@ import hudson.model.AbstractProject;
 import hudson.model.Result;
 import hudson.model.Run;
 import hudson.model.TaskListener;
-import hudson.plugins.git.Branch;
 import hudson.plugins.git.GitException;
-import hudson.plugins.git.Revision;
 import hudson.plugins.git.util.Build;
 import hudson.plugins.git.util.BuildData;
 import hudson.tasks.BuildStepDescriptor;
@@ -70,7 +66,6 @@ public class CollectGitStep extends Builder implements SimpleBuildStep {
         return markedCommit;
     }
 
-    @SuppressWarnings("null")
     @Override
     public void perform(@Nonnull Run<?, ?> run, @Nonnull FilePath workspace,
                         @Nonnull Launcher launcher, @Nonnull TaskListener listener)
@@ -96,39 +91,45 @@ public class CollectGitStep extends Builder implements SimpleBuildStep {
                            : "HEAD";
 
         listener.getLogger().println("[GitCollect] Analyzing repository at: " + gitDir.getRemote());
+        LocalGitInfo info = workspace.act(new GitScanner(git, markedCommit));
 
-        ObjectId resolvedObjectId;
-        try {
-            resolvedObjectId = git.revParse(targetStr);
-            listener.getLogger().println("[GitCollect] Resolved '" + targetStr + "' to SHA: " + resolvedObjectId.name());
-        } catch (GitException e) {
-            throw new IOException("[GitCollect] Could not resolve revision '" + targetStr + "'", e);
-        }
+        listener.getLogger().println("[GitCollect] url: " + info.getRemoteUrl() + " branch: " + info.getBranch());
 
-        Revision builtRevision = new Revision(resolvedObjectId);
-        Revision markedRevision = new Revision(resolvedObjectId);
-
-        // If the user input is NOT a raw SHA1 (meaning it is a branch name or tag),
-        // we attach that name to the Marked Revision so the UI displays "origin/master" etc.
-        if (markedCommit != null && !ObjectId.isId(markedCommit)) {
-            Collection<Branch> branches = new ArrayList<>();
-            branches.add(new Branch(markedCommit, resolvedObjectId));
-            markedRevision.setBranches(branches);
-        }
+        listener.getLogger().println("[GitCollect] Analyzing repository at: " + gitDir.getRemote());
 
         Result result = run.getResult();
         if (result == null) {
-            result = Result.SUCCESS; // Default to Success if running
+            result = Result.SUCCESS;
         }
 
         BuildData buildData = new BuildData();
-        buildData.addRemoteUrl(gitDir.getRemote()); // Helps Jenkins identify the repo
-
-        Build gitBuild = new Build(markedRevision, builtRevision, run.getNumber(), result);
+        buildData.addRemoteUrl(info.getRemoteUrl());
+        Build gitBuild = new Build(info.getMarkedRevision(), info.getBuiltRevision(), run.getNumber(), result);
         buildData.saveBuild(gitBuild);
 
-        run.addAction(buildData);
-        listener.getLogger().println("[GitCollect] BuildData attached. Marked: " + targetStr + ", Built: " + resolvedObjectId.name());
+        // Track whether we're trying to add a duplicate BuildData, now that it's been updated with
+        // revision info for this build etc. The default assumption is that it's a duplicate.
+        boolean buildDataAlreadyPresent = false;
+        List<BuildData> actions = run.getActions(BuildData.class);
+        for (BuildData d: actions)  {
+            if (d.similarTo(buildData)) {
+                buildDataAlreadyPresent = true;
+                break;
+            }
+        }
+        if (!actions.isEmpty()) {
+            buildData.setIndex(actions.size()+1);
+        }
+
+        // If the BuildData is not already attached to this build, add it to the build and mark that
+        // it wasn't already present, so that we add the GitTagAction and changelog after the checkout
+        // finishes.
+        if (!buildDataAlreadyPresent) {
+            run.addAction(buildData);
+            run.addAction(new MultiScmEnvAction(info));
+        }
+
+        listener.getLogger().println("[GitCollect] BuildData attached. Marked: " + targetStr + ", Built: " + info.getShaRevision());
     }
 
     @Symbol("collectGit") // Allows: collectGit path: 'src', markedCommit: 'master'
