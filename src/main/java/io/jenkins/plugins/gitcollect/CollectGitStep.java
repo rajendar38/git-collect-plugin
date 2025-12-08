@@ -1,6 +1,16 @@
 package io.jenkins.plugins.gitcollect;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
+
+import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystems;
+import java.nio.file.Files;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -8,6 +18,7 @@ import java.util.logging.Logger;
 import javax.annotation.Nonnull;
 
 import org.jenkinsci.Symbol;
+import org.jenkinsci.plugins.gitclient.ChangelogCommand;
 import org.jenkinsci.plugins.gitclient.Git;
 import org.jenkinsci.plugins.gitclient.GitClient;
 import org.kohsuke.stapler.DataBoundConstructor;
@@ -34,6 +45,7 @@ public class CollectGitStep extends Builder implements SimpleBuildStep {
 
     private String path;
     private String markedCommit; // Optional: A branch name (e.g. "master") or SHA
+    private Boolean changelog = false;
 
     public static final Logger LOGGER = Logger.getLogger(CollectGitStep.class.getName());
 
@@ -48,6 +60,42 @@ public class CollectGitStep extends Builder implements SimpleBuildStep {
            return false;
         }
     }
+
+    /**
+     * Write changelog function
+     */
+    private void writeChangelog(@Nonnull Run<?, ?> run, GitClient git, LocalGitInfo info) throws IOException {
+        File changelogFile = null;
+
+        if (FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
+            changelogFile = Files.createTempFile(run.getRootDir().toPath(), "changelog", ".xml",
+                    PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-r--r--"))).toFile();
+        } else {
+            changelogFile = Files.createTempFile(run.getRootDir().toPath(), "changelog", ".xml").toFile();
+        }
+
+        if (changelogFile != null) {
+            ChangelogCommand changelog = git.changelog();
+            OutputStream stream = new FileOutputStream(changelogFile);
+
+            Writer out = new OutputStreamWriter(stream, StandardCharsets.UTF_8);
+
+            try {
+                changelog.includes(info.getBuiltRevision().getSha1String())
+                    .excludes(info.getMarkedRevision().getSha1String())
+                    .to(out)
+                    .execute();
+            } catch (GitException e) {
+                e.printStackTrace();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            } finally {
+                Files.deleteIfExists(changelogFile.toPath());
+                changelogFile = null;
+            }
+        }
+    }
+
     @DataBoundConstructor
     public CollectGitStep() {
     }
@@ -59,6 +107,15 @@ public class CollectGitStep extends Builder implements SimpleBuildStep {
 
     public String getPath() {
         return path;
+    }
+
+    @DataBoundSetter
+    public void setChangelog(boolean changelog) {
+        this.changelog = changelog;
+    }
+
+    public Boolean getChangelog() {
+        return this.changelog;
     }
 
     @DataBoundSetter
@@ -102,6 +159,11 @@ public class CollectGitStep extends Builder implements SimpleBuildStep {
         Result result = run.getResult();
         if (result == null) {
             result = Result.SUCCESS;
+        }
+
+        if (changelog && !info.getMarkedRevision().getSha1String().equals(
+            info.getBuiltRevision().getSha1String())) {
+            writeChangelog(run, git, info);
         }
 
         BuildData buildData = new BuildData();

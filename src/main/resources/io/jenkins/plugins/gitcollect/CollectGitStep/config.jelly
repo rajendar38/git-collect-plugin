@@ -6,4 +6,7 @@
     <f:entry title="Marked Commit / Branch" field="markedCommit" description="Branch name (e.g. 'master') or SHA1. Defaults to HEAD.">
         <f:textbox />
     </f:entry>
+    <f:entry field="changelog">
+        <f:checkbox title="Include in changelog?" default="true"/>
+    </f:entry>
 </j:jelly>
