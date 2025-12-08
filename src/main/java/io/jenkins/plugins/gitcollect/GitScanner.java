@@ -23,13 +23,13 @@ import java.util.logging.Logger;
 public class GitScanner extends MasterToSlaveFileCallable<LocalGitInfo> {
     private static final long serialVersionUID = 1L;
     private final GitClient git;
-    private final String targetStr;
+    private final String markedCommit;
 
     public static final Logger LOGGER = Logger.getLogger(GitScanner.class.getName());
 
-    public GitScanner(GitClient git, String targetStr) {
+    public GitScanner(GitClient git, String markedCommit) {
         this.git = git;
-        this.targetStr = targetStr;
+        this.markedCommit = markedCommit;
     }
 
     @Override
@@ -37,30 +37,37 @@ public class GitScanner extends MasterToSlaveFileCallable<LocalGitInfo> {
 
         String url = git.getRemoteUrl("origin");
 
-        String targetHead = (targetStr != null && !targetStr.trim().isEmpty())
-                           ? targetStr
+        String referenceHead = (markedCommit != null && !markedCommit.trim().isEmpty())
+                           ? markedCommit
                            : "HEAD";
 
         ObjectId resolvedObjectId;
         try {
-            resolvedObjectId = git.revParse(targetHead);
+            resolvedObjectId = git.revParse(referenceHead);
         } catch (GitException e) {
-            throw new IOException("[GitCollect] Could not resolve revision '" + targetHead + "'", e);
+            throw new IOException("[GitCollect] Could not resolve revision '" + referenceHead + "'", e);
         }
 
-        LOGGER.log(Level.FINE, "TargetHead: " + targetHead);
+        ObjectId topOnObjectId;
+        try {
+            topOnObjectId = git.revParse("HEAD");
+        } catch (GitException e) {
+            throw new IOException("[GitCollect] Could not resolve revision '" + referenceHead + "'", e);
+        }
+
+        LOGGER.log(Level.FINE, "referenceHead: " + referenceHead);
 
         try {
-            Revision builtRevision = new Revision(resolvedObjectId);
+            Revision builtRevision = new Revision(topOnObjectId);
             Revision markedRevision = new Revision(resolvedObjectId);
 
             Collection<Branch> branches = new ArrayList<>();
-            branches.add(new Branch(targetHead, resolvedObjectId));
+            branches.add(new Branch(referenceHead, resolvedObjectId));
             builtRevision.setBranches(branches);
 
-            if (targetStr != null && !ObjectId.isId(targetStr)) {
+            if (markedCommit != null && !ObjectId.isId(markedCommit)) {
                 branches = new ArrayList<>();
-                branches.add(new Branch(targetStr, resolvedObjectId));
+                branches.add(new Branch(markedCommit, resolvedObjectId));
                 markedRevision.setBranches(branches);
             }
 
