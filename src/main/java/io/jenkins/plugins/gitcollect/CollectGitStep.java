@@ -85,13 +85,9 @@ public class CollectGitStep extends Builder implements SimpleBuildStep {
                     .excludes(info.getMarkedRevision().getSha1String())
                     .to(out)
                     .execute();
-            } catch (GitException e) {
-                e.printStackTrace();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            } finally {
+            } catch (GitException | InterruptedException e) {
                 Files.deleteIfExists(changelogFile.toPath());
-                changelogFile = null;
+                e.printStackTrace();
             }
         }
     }
