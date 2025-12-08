@@ -1,5 +1,8 @@
 package io.jenkins.plugins.gitcollect;
 
+import org.jenkinsci.plugins.workflow.job.WorkflowRun;
+import org.jenkinsci.plugins.workflow.job.WorkflowRun.SCMListenerImpl;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -34,6 +37,7 @@ import hudson.model.Result;
 import hudson.model.Run;
 import hudson.model.TaskListener;
 import hudson.plugins.git.GitException;
+import hudson.plugins.git.GitSCM;
 import hudson.plugins.git.util.Build;
 import hudson.plugins.git.util.BuildData;
 import hudson.tasks.BuildStepDescriptor;
@@ -64,7 +68,7 @@ public class CollectGitStep extends Builder implements SimpleBuildStep {
     /**
      * Write changelog function
      */
-    private void writeChangelog(@Nonnull Run<?, ?> run, GitClient git, LocalGitInfo info) throws IOException {
+    private String writeChangelog(@Nonnull Run<?, ?> run, GitClient git, LocalGitInfo info) throws IOException {
         File changelogFile = null;
 
         if (FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
@@ -89,7 +93,21 @@ public class CollectGitStep extends Builder implements SimpleBuildStep {
                 Files.deleteIfExists(changelogFile.toPath());
                 e.printStackTrace();
             }
+
+            return changelogFile.getAbsolutePath();
         }
+
+        return null;
+    }
+
+    /**
+     * Performs the necessary logic against Pipeline jobs.
+     */
+    private void perfromAgainstWorkflowRun(WorkflowRun run, FilePath workspace,
+                TaskListener listener, String url, String changeLogPath) throws IOException, Exception {
+        SCMListenerImpl scmListenerImpl = new WorkflowRun.SCMListenerImpl();
+        scmListenerImpl.onCheckout(run, new GitSCM(url), workspace, listener,
+                                   new File(changeLogPath), null);
     }
 
     @DataBoundConstructor
@@ -159,7 +177,15 @@ public class CollectGitStep extends Builder implements SimpleBuildStep {
 
         if (changelog && !info.getMarkedRevision().getSha1String().equals(
             info.getBuiltRevision().getSha1String())) {
-            writeChangelog(run, git, info);
+            String path = writeChangelog(run, git, info);
+            if (path != null && !path.isEmpty() && run instanceof WorkflowRun) {
+                try {
+                    perfromAgainstWorkflowRun((WorkflowRun)run, workspace, listener,
+                                              info.getRemoteUrl(), path);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
         }
 
         BuildData buildData = new BuildData();
