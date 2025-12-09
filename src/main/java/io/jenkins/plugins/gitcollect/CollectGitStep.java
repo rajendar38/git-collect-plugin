@@ -38,6 +38,7 @@ import hudson.model.Run;
 import hudson.model.TaskListener;
 import hudson.plugins.git.GitException;
 import hudson.plugins.git.GitSCM;
+import hudson.plugins.git.browser.GitRepositoryBrowser;
 import hudson.plugins.git.extensions.impl.RelativeTargetDirectory;
 import hudson.plugins.git.util.Build;
 import hudson.plugins.git.util.BuildData;
@@ -159,6 +160,8 @@ public class CollectGitStep extends Builder implements SimpleBuildStep {
 
         GitSCM scm = new GitSCM(url);
         scm.getExtensions().add(new RelativeTargetDirectory(gitDir.getRemote()));
+        GitRepositoryBrowser browser =  (GitRepositoryBrowser) scm.guessBrowser();
+        scm.setBrowser(browser);
 
         scmListenerImpl.onCheckout(run, scm, workspace, listener,
                                    new File(changeLogPath), null);
