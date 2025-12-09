@@ -153,7 +153,7 @@ public class CollectGitStep extends Builder implements SimpleBuildStep {
      * @throws IOException If an I/O error occurs.
      * @throws Exception   If any other error occurs during the listener invocation.
      */
-    private void perfromAgainstWorkflowRun(WorkflowRun run, FilePath gitDir, FilePath workspace,
+    private GitSCM perfromAgainstWorkflowRun(WorkflowRun run, FilePath gitDir, FilePath workspace,
                 TaskListener listener, String url, String changeLogPath) throws IOException, Exception {
         SCMListenerImpl scmListenerImpl = new WorkflowRun.SCMListenerImpl();
 
@@ -162,6 +162,7 @@ public class CollectGitStep extends Builder implements SimpleBuildStep {
 
         scmListenerImpl.onCheckout(run, scm, workspace, listener,
                                    new File(changeLogPath), null);
+        return scm;
     }
 
     /**
@@ -282,12 +283,14 @@ public class CollectGitStep extends Builder implements SimpleBuildStep {
             result = Result.SUCCESS;
         }
 
+        GitSCM scm = null;
+
         if (changelog && !info.getMarkedRevision().getSha1String().equals(
             info.getBuiltRevision().getSha1String())) {
             String path = writeChangelog(run, git, info);
             if (path != null && !path.isEmpty() && run instanceof WorkflowRun) {
                 try {
-                    perfromAgainstWorkflowRun((WorkflowRun)run, gitDir, workspace, listener,
+                    scm = perfromAgainstWorkflowRun((WorkflowRun)run, gitDir, workspace, listener,
                                               info.getRemoteUrl(), path);
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -296,6 +299,15 @@ public class CollectGitStep extends Builder implements SimpleBuildStep {
         }
 
         BuildData buildData = new BuildData();
+
+        if (scm != null) {
+            buildData = scm.copyBuildData(run.getPreviousBuild());
+        }
+
+        if (buildData.lastBuild != null) {
+            LOGGER.log(Level.INFO, "Last Built Revision: " + buildData.lastBuild.revision);
+        }
+
         buildData.addRemoteUrl(info.getRemoteUrl());
         Build gitBuild = new Build(info.getMarkedRevision(), info.getBuiltRevision(), run.getNumber(), result);
         buildData.saveBuild(gitBuild);
