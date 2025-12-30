@@ -79,6 +79,12 @@ public class CollectGitStep extends Builder implements SimpleBuildStep {
     private String markedCommit;
 
     /**
+     * Optional remote name used to work with checkout detach branch.
+     * Defaults to "origin" if not specified
+     */
+    private String remote;
+
+    /**
      * Flag indicating whether to generate a changelog between the marked revision and the current revision.
      */
     private Boolean changelog = false;
@@ -251,6 +257,28 @@ public class CollectGitStep extends Builder implements SimpleBuildStep {
     }
 
     /**
+     * Sets the specific remote name (origin, m, ...).
+     *
+     * @param remote Set the remote name.
+     */
+    @DataBoundSetter
+    public void setRemote(String remote) {
+        this.remote = remote;
+    }
+
+    /**
+     * Gets the remote branch.
+     *
+     * @return The return the remote name.
+     */
+    public String getRemote() {
+        if (remote == null || remote.isEmpty()) {
+            return "origin";
+        }
+        return remote;
+    }
+
+    /**
      * Sets the specific commit or branch to mark as the previous baseline.
      *
      * @param markedCommit A SHA1 hash or branch name (e.g., "master").
@@ -314,7 +342,7 @@ public class CollectGitStep extends Builder implements SimpleBuildStep {
                            : "HEAD";
 
         LOGGER.log(Level.INFO, "Analyzing repository at: " + gitDir.getRemote());
-        LocalGitInfo info = workspace.act(new GitScanner(git, markedCommit));
+        LocalGitInfo info = workspace.act(new GitScanner(git, markedCommit, getRemote()));
 
         LOGGER.log(Level.FINE, "url: " + info.getRemoteUrl() + " branch: " + info.getBranch());
 

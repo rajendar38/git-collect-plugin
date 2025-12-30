@@ -44,6 +44,12 @@ public class GitScanner extends MasterToSlaveFileCallable<LocalGitInfo> {
      */
     private final String markedCommit;
 
+    /**
+     * The optional reference remote name.
+     * If null, "origin" is used.
+     */
+    private final String remote;
+
     public static final Logger LOGGER = Logger.getLogger(GitScanner.class.getName());
 
     /**
@@ -51,10 +57,12 @@ public class GitScanner extends MasterToSlaveFileCallable<LocalGitInfo> {
      *
      * @param git          The {@link GitClient} initialized for the specific workspace directory.
      * @param markedCommit A specific commit hash or branch name to resolve as the "marked" revision.
+     * @param remote Specify the remote name
      */
-    public GitScanner(GitClient git, String markedCommit) {
+    public GitScanner(GitClient git, String markedCommit, String remote) {
         this.git = git;
         this.markedCommit = markedCommit;
+        this.remote = remote;
     }
 
     /**
@@ -78,7 +86,7 @@ public class GitScanner extends MasterToSlaveFileCallable<LocalGitInfo> {
     @Override
     public LocalGitInfo invoke(File workspace, VirtualChannel channel) throws IOException, InterruptedException {
 
-        String url = git.getRemoteUrl("origin");
+        String url = git.getRemoteUrl(remote);
 
         String referenceHead = (markedCommit != null && !markedCommit.trim().isEmpty())
                            ? markedCommit
@@ -88,7 +96,12 @@ public class GitScanner extends MasterToSlaveFileCallable<LocalGitInfo> {
         try {
             resolvedObjectId = git.revParse(referenceHead);
         } catch (GitException e) {
-            throw new IOException("[GitCollect] Could not resolve revision '" + referenceHead + "'", e);
+            try {
+                resolvedObjectId = git.revParse(remote + "/" + referenceHead);
+            } catch (GitException e2) {
+                throw new IOException("[GitCollect] Could not resolve revision '" +
+                                       referenceHead + "' or '" + remote + "/" + referenceHead + "'", e);
+            }
         }
 
         ObjectId topOnObjectId;
